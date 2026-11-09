@@ -1,0 +1,203 @@
+{
+  "VideoFinishSaveVideo": {
+    "inputs": {
+      "required": {
+        "video": [
+          "VIDEO",
+          null
+        ],
+        "filename_prefix": [
+          "STRING",
+          "video/ComfyUI"
+        ],
+        "suffix": [
+          "STRING",
+          ""
+        ],
+        "container": [
+          "COMBO",
+          "mp4"
+        ],
+        "video_codec": [
+          "COMBO",
+          "h265"
+        ],
+        "crf": [
+          "INT",
+          18
+        ],
+        "video_bitrate_kbps": [
+          "INT",
+          0
+        ],
+        "bit_depth": [
+          "COMBO",
+          "auto"
+        ],
+        "preset": [
+          "COMBO",
+          "medium"
+        ],
+        "audio_codec": [
+          "COMBO",
+          "flac"
+        ],
+        "audio_bitrate_kbps": [
+          "INT",
+          192
+        ]
+      },
+      "optional": {
+        "title": [
+          "STRING",
+          null
+        ],
+        "artist": [
+          "STRING",
+          null
+        ],
+        "comment": [
+          "STRING",
+          null
+        ],
+        "lyrics": [
+          "STRING",
+          null
+        ]
+      }
+    },
+    "outputs": [
+      [
+        "VIDEO",
+        "video"
+      ],
+      [
+        "VIDEO",
+        "saved"
+      ]
+    ]
+  },
+  "VideoFinishPlan": {
+    "inputs": {
+      "required": {
+        "upscale": [
+          "BOOLEAN",
+          false
+        ],
+        "upscale_model": [
+          "COMBO",
+          null
+        ],
+        "resize": [
+          "COMBO",
+          "off"
+        ],
+        "size": [
+          "INT",
+          1080
+        ],
+        "interpolate": [
+          "COMBO",
+          "none"
+        ],
+        "rife_model": [
+          "COMBO",
+          null
+        ]
+      },
+      "optional": {}
+    },
+    "outputs": [
+      [
+        "VIDEOFINISH_PLAN",
+        "plan"
+      ]
+    ]
+  },
+  "VideoFinishProcess": {
+    "inputs": {
+      "required": {
+        "video": [
+          "VIDEO",
+          null
+        ],
+        "plan": [
+          "VIDEOFINISH_PLAN",
+          null
+        ],
+        "filename_prefix": [
+          "STRING",
+          "video/ComfyUI"
+        ],
+        "suffix": [
+          "STRING",
+          "post"
+        ],
+        "container": [
+          "COMBO",
+          "mp4"
+        ],
+        "video_codec": [
+          "COMBO",
+          "h265"
+        ],
+        "crf": [
+          "INT",
+          18
+        ],
+        "video_bitrate_kbps": [
+          "INT",
+          0
+        ],
+        "bit_depth": [
+          "COMBO",
+          "auto"
+        ],
+        "preset": [
+          "COMBO",
+          "medium"
+        ],
+        "audio_codec": [
+          "COMBO",
+          "flac"
+        ],
+        "audio_bitrate_kbps": [
+          "INT",
+          192
+        ]
+      },
+      "optional": {
+        "same_number_as": [
+          "VIDEO",
+          null
+        ],
+        "title": [
+          "STRING",
+          null
+        ],
+        "artist": [
+          "STRING",
+          null
+        ],
+        "comment": [
+          "STRING",
+          null
+        ],
+        "lyrics": [
+          "STRING",
+          null
+        ]
+      }
+    },
+    "outputs": [
+      [
+        "VIDEO",
+        "saved"
+      ],
+      [
+        "STRING",
+        "report"
+      ]
+    ]
+  }
+}
