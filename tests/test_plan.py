@@ -64,6 +64,13 @@ class PlanTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "scale"):
             P.resolve(P.make(upscale=True, upscale_model="m"), 64, 64)
 
+    def test_enabled_steps_need_a_model(self):
+        with self.assertRaisesRegex(ValueError, "upscale model"):
+            P.make(upscale=True, upscale_model=P.NONE)
+        with self.assertRaisesRegex(ValueError, "RIFE model"):
+            P.make(interpolate="2x", rife_model=P.NONE)
+        self.assertTrue(P.enabled(P.make(fit="height", size=720, upscale_model=P.NONE, rife_model=P.NONE)))
+
     def test_unknown_choices(self):
         with self.assertRaises(ValueError):
             P.make(fit="keep upscaled size")

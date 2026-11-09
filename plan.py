@@ -6,6 +6,7 @@ in the fixed order upscale → resize → interpolate.
 
 FITS = ("off", "height", "width")
 INTERPOLATIONS = ("none", "2x", "3x", "4x")
+NONE = "none"                                       # model choice when a step needs none
 
 
 def even(x):
@@ -18,6 +19,10 @@ def make(upscale=False, upscale_model=None, fit="off", size=1080, interpolate="n
         raise ValueError(f"Unknown fit {fit!r}; choose {', '.join(FITS)}")
     if interpolate not in INTERPOLATIONS:
         raise ValueError(f"Unknown interpolation {interpolate!r}; choose {', '.join(INTERPOLATIONS)}")
+    if upscale and upscale_model in (None, "", NONE):
+        raise ValueError("upscale is on: choose an upscale model (models/upscale_models), or turn the upscale off")
+    if interpolate != "none" and rife_model in (None, "", NONE):
+        raise ValueError("interpolation is on: choose a RIFE model (models/rife), or set interpolate to none")
     return {
         "upscale": {"model": upscale_model} if upscale else None,
         "resize": {"fit": fit, "size": int(size)} if fit != "off" else None,

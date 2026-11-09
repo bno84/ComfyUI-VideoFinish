@@ -190,18 +190,41 @@ def pixels(image, bit_depth):
 
 
 class AudioSource:
-    """The first audio stream of a file, for copying its packets unchanged."""
+    """The first audio stream of a file, for copying its packets unchanged.
 
-    def __init__(self, file):
+    origin: the source time (seconds) the output starts at, i.e. its first video frame. Packets are moved onto
+    the output's timeline, keeping their offset from the video; packets that end before the origin are dropped."""
+
+    def __init__(self, file, origin=0):
         if hasattr(file, "seek"):
             file.seek(0)
+        self.origin = Fraction(origin)
         self.container = av.open(file)
         if not self.container.streams.audio:
             self.container.close()
             raise ValueError("audio copy needs a source file with an audio stream")
         self.stream = self.container.streams.audio[0]
         self.codec = self.stream.codec_context.codec.canonical_name if self.stream.codec_context else None
-        self.packets = (p for p in self.container.demux(self.stream) if p.dts is not None and p.size)
+        self.packets = self._rebased()
+
+    def _rebased(self):
+        for packet in self.container.demux(self.stream):
+            if not packet.size:                          # the demuxer's empty flush packet
+                continue
+            start = packet.pts if packet.pts is not None else packet.dts
+            if start is None:
+                continue
+            shift = round(self.origin / packet.time_base)
+            # Drop packets that end before the origin; keep those overlapping it, e.g. Opus priming packets
+            # with negative timestamps.
+            last = start + packet.duration - 1 if packet.duration else start
+            if last < shift:
+                continue
+            if packet.pts is not None:
+                packet.pts -= shift
+            if packet.dts is not None:
+                packet.dts -= shift
+            yield packet
 
     def close(self):
         self.container.close()
@@ -216,7 +239,8 @@ class Writer:
     duration, as core Save Video does. Pass `audio` (AUDIO dict) or `audio_copy` (file path or BytesIO), not both.
     """
 
-    def __init__(self, path, width, height, rate, settings, *, audio=None, audio_copy=None, metadata=None):
+    def __init__(self, path, width, height, rate, settings, *, audio=None, audio_copy=None, audio_origin=0,
+                 metadata=None):
         self.path = os.fspath(path)
         self.width, self.height = width, height
         self.rate = frame_rate(rate)
@@ -242,7 +266,7 @@ class Writer:
         if audio_copy is not None:
             if settings.audio_codec != COPY:
                 raise ValueError("audio_copy needs audio_codec copy")
-            self._copy = AudioSource(audio_copy)
+            self._copy = AudioSource(audio_copy, audio_origin)
         try:
             validate(settings, width, height, self._copy.codec if self._copy else
                      settings.audio_codec if self._audio else None)
@@ -463,7 +487,7 @@ def remux(source, path, container, metadata=None):
                         out.codec_tag = "hvc1"
                     mapping[s] = out
                 for packet in src.demux(*streams):
-                    if packet.dts is None:
+                    if not packet.size:                  # the demuxer's empty flush packets
                         continue
                     packet.stream = mapping[packet.stream]
                     output.mux(packet)

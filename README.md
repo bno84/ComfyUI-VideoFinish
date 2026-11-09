@@ -18,8 +18,8 @@ Three nodes around ComfyUI's native `VIDEO`:
   GPU and encodes the result once, straight to the output folder.
 
 Each of these operations exists in other packs too. This pack combines them so that
-each saved file costs exactly one encode, and processing never needs the whole
-video in memory.
+each saved file costs exactly one encode. Processing streams frames instead of
+holding the whole result in memory (exceptions under *Memory and speed*).
 
 ## Install
 
@@ -98,7 +98,17 @@ sources cannot be upscaled, because the models are trained on SDR video.
 
 The process node holds a few frames at a time, not the whole result. A tensor
 input (Create Video) is already in memory upstream; a file input is decoded one
-frame at a time.
+frame at a time. Two exceptions decode a whole input into memory:
+
+- A trimmed or cropped file VIDEO (e.g. from core Video Slice) is decoded by
+  ComfyUI into one float32 tensor of frames × width × height × 12 bytes. The
+  console states the estimated size first.
+- Re-encoding a file's audio decodes the whole soundtrack: about 90 MB for 4
+  minutes of 48 kHz stereo. `audio_codec` `copy` does not.
+
+Audio keeps its offset from the first video frame: audio that starts later
+stays delayed, and audio before the first frame is dropped. Gaps inside an
+audio stream are not filled when re-encoding.
 
 Measured on an RX 9070 XT (16 GB, ROCm) with a 29.25 s, 704×544, 24 fps clip,
 processed by Real-CUGAN 4× → height 1080 → RIFE 2× (1404 frames of 1398×1080 at 48 fps, H.265 CRF 18 medium):

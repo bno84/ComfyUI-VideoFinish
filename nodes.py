@@ -132,25 +132,26 @@ class VideoFinishSaveVideo:
              preset, audio_codec, audio_bitrate_kbps, prompt=None, extra_pnginfo=None, **info):
         from comfy_api.latest import InputImpl
         tags = metadata(prompt, extra_pnginfo, info)
-        width, height = video.get_dimensions()
-        path, file, subfolder = naming.reserve(filename_prefix, suffix, container, width, height)
         if video_codec == "copy":
             source = file_path(video)
             if source is None:
                 raise ValueError("video_codec copy needs a video file (e.g. Load Video) without trim or crop; "
                                  "this video is frames, so choose h264, h265 or av1")
-            E.remux(source, path, container, metadata=tags)
+            width, height = video.get_dimensions()
+            with naming.reserved(filename_prefix, suffix, container, width, height) as (path, file, subfolder):
+                E.remux(source, path, container, metadata=tags)
         else:
             source = open_source(video)
             s = settings(source, container, video_codec, crf, video_bitrate_kbps, bit_depth, preset, audio_codec,
                          audio_bitrate_kbps)
             audio, audio_copy = audio_for(source, s)
             on_frame = progress(source.count)
-            with E.Writer(path, source.width, source.height, source.fps, s, audio=audio, audio_copy=audio_copy,
-                          metadata=tags) as writer:
-                for image in source.frames():
-                    writer.write(image)
-                    on_frame(writer.written)
+            with naming.reserved(filename_prefix, suffix, container, source.width, source.height) as (path, file, subfolder):
+                with E.Writer(path, source.width, source.height, source.fps, s, audio=audio, audio_copy=audio_copy,
+                              audio_origin=source.origin, metadata=tags) as writer:
+                    for image in source.frames():
+                        writer.write(image)
+                        on_frame(writer.written)
         return {"ui": shown(file, subfolder), "result": (video, InputImpl.VideoFromFile(path))}
 
 
@@ -159,7 +160,7 @@ class VideoFinishPlan:
     def INPUT_TYPES(cls):
         return {"required": {
             "upscale": ("BOOLEAN", {"default": False, "tooltip": "on = upscale every frame with the model below"}),
-            "upscale_model": (models.upscale_models(), {"tooltip": "From models/upscale_models (spandrel). Tested: "
+            "upscale_model": ([P.NONE, *models.upscale_models()], {"tooltip": "From models/upscale_models (spandrel). Tested: "
                               "Real-CUGAN conservative 4x, LiveAction V1 SPAN 2x."}),
             "resize": (list(P.FITS), {"default": "off", "tooltip": "Lanczos resize after any upscale, locked aspect "
                        "ratio: 'size' sets this side, the other follows (rounded to even pixels)."}),
@@ -167,7 +168,7 @@ class VideoFinishPlan:
                              "tooltip": "Target pixels for the 'resize' side, e.g. height 1080 or width 1920."}),
             "interpolate": (list(P.INTERPOLATIONS), {"default": "none", "tooltip": "RIFE frame interpolation: "
                             "2x/3x/4x the frame rate, same duration. Runs last."}),
-            "rife_model": (models.rife_models(), {"tooltip": "From models/rife: RIFE 4.26 (Practical-RIFE flownet.pkl)."}),
+            "rife_model": ([P.NONE, *models.rife_models()], {"tooltip": "From models/rife: RIFE 4.26 (Practical-RIFE flownet.pkl)."}),
         }}
 
     RETURN_TYPES = (PLAN,)
@@ -241,9 +242,6 @@ class VideoFinishProcess:
         if same_number_as is not None and number is None:
             notes.append("'same_number_as' is not a numbered output file: counted normally")
         prefix = number[0] if number else filename_prefix
-        path, file, subfolder = naming.reserve(prefix, suffix, container, out_w, out_h,
-                                               number=number[1] if number else None)
-
         expected = source.count * P.multiplier(steps)
         on_frame = progress(expected)
         description = P.describe(steps, source.width, source.height, source.fps)
@@ -252,9 +250,11 @@ class VideoFinishProcess:
         mm.soft_empty_cache()
         started = time.monotonic()
         try:
-            with E.Writer(path, out_w, out_h, rate, s, audio=audio, audio_copy=audio_copy,
-                          metadata=metadata(prompt, extra_pnginfo, info)) as writer:
-                count = R.run(source, steps, upscaler, rife, writer, mm.get_torch_device(), on_frame=on_frame)
+            with naming.reserved(prefix, suffix, container, out_w, out_h,
+                                 number=number[1] if number else None) as (path, file, subfolder):
+                with E.Writer(path, out_w, out_h, rate, s, audio=audio, audio_copy=audio_copy,
+                              audio_origin=source.origin, metadata=metadata(prompt, extra_pnginfo, info)) as writer:
+                    count = R.run(source, steps, upscaler, rife, writer, mm.get_torch_device(), on_frame=on_frame)
         finally:
             del upscaler, rife
             mm.soft_empty_cache()

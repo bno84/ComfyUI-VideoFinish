@@ -2,6 +2,7 @@
 
 ComfyUI's counter reads "00012_post" as 12, so suffixed files keep the sequence going.
 """
+from contextlib import contextmanager
 import os
 import re
 
@@ -34,13 +35,30 @@ def numbered(video):
     return prefix, int(match["number"])
 
 
-def reserve(prefix, suffix, extension, width, height, number=None):
-    """A free output path. Returns (path, filename, subfolder). number: reuse this number instead of counting."""
+@contextmanager
+def reserved(prefix, suffix, extension, width, height, number=None):
+    """Reserve a free output path: yields (path, filename, subfolder). number: reuse this number instead of counting.
+
+    The name is claimed atomically with an empty placeholder file, so concurrent saves never pick the same name;
+    the writer then replaces the placeholder. If the block fails, an untouched placeholder is removed."""
     folder, name, counter, subfolder, _ = folder_paths.get_save_image_path(
         prefix, folder_paths.get_output_directory(), width, height)
     os.makedirs(folder, exist_ok=True)
     stem = f"{name}_{counter if number is None else number:05}_{suffix}"
     file, k = f"{stem}.{extension}", 2
-    while os.path.lexists(os.path.join(folder, file)):
-        file, k = f"{stem}-{k}.{extension}", k + 1
-    return os.path.join(folder, file), file, subfolder
+    while True:
+        path = os.path.join(folder, file)
+        try:
+            os.close(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666))
+            break
+        except FileExistsError:
+            file, k = f"{stem}-{k}.{extension}", k + 1
+    try:
+        yield path, file, subfolder
+    except BaseException:
+        try:
+            if os.path.getsize(path) == 0:
+                os.remove(path)
+        except OSError:
+            pass
+        raise

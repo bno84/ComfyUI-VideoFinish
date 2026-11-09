@@ -198,5 +198,10 @@ Not done without separate authorization: GitHub repo creation, pushes, tags, Reg
   `torch.load(weights_only=True)`.
 - GPU validation (2026-11-09, RX 9070 XT, the image pinned to ComfyUI 0.38.0): see the README's measurements.
   The vendored IFNet matches Fannovel16's 4.26 implementation to 1e-5 and loads the published checkpoint strictly.
+- Review round two (gpt-6.1-sol, medium) found these, all fixed with regression tests: MKV stream copy dropped
+  packets without DTS (undecodable result); copied audio ignored a non-zero source start; resize-only plans failed
+  validation without model files (`none` model choice added); output names were not reserved atomically
+  (placeholder created with O_EXCL); file inputs with alpha were silently flattened; and the README overstated
+  constant memory. The README now states the whole-decode exceptions.
 - Not verified: Python 3.10 (the image has 3.12; CI covers 3.10), rotation metadata (implemented as core does,
   no rotated test file), trimmed/cropped file inputs on GPU (CPU path uses core `get_components()`).

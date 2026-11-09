@@ -68,6 +68,7 @@ class TensorSource(Source):
         self.audio = components.audio
         self.has_audio = self.audio is not None and self.audio["waveform"].shape[-1] > 0
         self.file = None
+        self.origin = Fraction(0)
         self.bit_depth = video.get_bit_depth() if hasattr(video, "get_bit_depth") else 8
         color = video.get_color_space() if hasattr(video, "get_color_space") else "sRGB"
         self.color_space = "sRGB" if color in (None, "auto") else color
@@ -103,6 +104,10 @@ class FileSource(Source):
             first = next(container.decode(video=0), None)
             if first is None:
                 raise ValueError("the video contains no decodable frames")
+            if any(c.is_alpha for c in first.format.components) or first.format.name == "pal8":
+                raise ValueError("videos with alpha are not supported; drop the alpha channel first")
+            # The output starts at the first video frame; audio keeps its offset from it.
+            self.origin = Fraction(first.pts or 0) * first.time_base if first.time_base else Fraction(0)
             if first.rotation and int(round(first.rotation / 90)) % 2:
                 self.width, self.height = self.height, self.width
             elif first.rotation and first.rotation % 90:
@@ -118,18 +123,32 @@ class FileSource(Source):
         return av.open(self.file)
 
     def load_audio(self):
-        """Decode the first audio stream into ComfyUI AUDIO (for re-encoding; copy uses the file)."""
+        """Decode the first audio stream into ComfyUI AUDIO, for re-encoding (copy uses the file).
+
+        The whole soundtrack is decoded into memory: 4 minutes of 48 kHz stereo are about 90 MB. Samples are
+        placed on the video's timeline: audio that starts later is preceded by silence, audio before the first
+        video frame is dropped. Gaps inside the audio stream are not filled."""
         if not self.has_audio:
             return None
         with self._open() as container:
             stream = container.streams.audio[0]
-            resampler = av.AudioResampler(format="fltp", layout=stream.layout.name, rate=stream.sample_rate)
-            chunks = [f.to_ndarray() for frame in container.decode(stream) for f in resampler.resample(frame)]
+            rate = stream.sample_rate
+            resampler = av.AudioResampler(format="fltp", layout=stream.layout.name, rate=rate)
+            chunks, start = [], None
+            for frame in container.decode(stream):
+                if start is None and frame.pts is not None:
+                    start = Fraction(frame.pts) * frame.time_base
+                chunks += [f.to_ndarray() for f in resampler.resample(frame)]
             chunks += [f.to_ndarray() for f in resampler.resample(None)]
         if not chunks:
             return None
         waveform = torch.from_numpy(np.concatenate(chunks, axis=1)).float()
-        return {"waveform": waveform[None], "sample_rate": stream.sample_rate}
+        offset = round(((start or self.origin) - self.origin) * rate)
+        if offset > 0:
+            waveform = torch.cat([torch.zeros(waveform.shape[0], offset), waveform], dim=1)
+        elif offset < 0:
+            waveform = waveform[:, -offset:]
+        return {"waveform": waveform[None], "sample_rate": rate}
 
     def frames(self):
         with self._open() as container:
@@ -149,12 +168,21 @@ class FileSource(Source):
                 yield image
 
 
-def open_source(video):
+def open_source(video, log=print):
     """The cheapest exact reading of a VIDEO: its tensors, its file decoded incrementally, or get_components()."""
     file = file_path(video)
     if file is not None:
         return FileSource(file)
+    whole = type(video).__name__ == "VideoFromFile"
+    if whole:
+        # Core decodes a trimmed or cropped file VIDEO into one float32 tensor.
+        try:
+            width, height = video.get_dimensions()
+            size = video.get_frame_count() * width * height * 12 / 2 ** 30
+            log(f"[video finish] trimmed or cropped video: decoding it whole into memory (about {size:.1f} GiB)")
+        except Exception:
+            log("[video finish] trimmed or cropped video: decoding it whole into memory")
     source = TensorSource(video)
-    if hasattr(video, "get_stream_source") and type(video).__name__ == "VideoFromFile":
-        source.note = "decoded whole (trimmed or cropped file)"
+    if whole:
+        source.note = "trimmed or cropped file, decoded whole into memory"
     return source

@@ -260,6 +260,33 @@ class ProcessTests(NodeTestCase):
         self.assertEqual(self.files(), ["video/test_00001_post.mp4"])
 
 
+class NamingTests(NodeTestCase):
+    def test_reservations_never_share_a_name(self):
+        naming = load("naming")
+        with naming.reserved("video/race", "post", "mp4", 64, 64, number=7) as (first, _, _):
+            with naming.reserved("video/race", "post", "mp4", 64, 64, number=7) as (second, _, _):
+                self.assertNotEqual(first, second)
+        self.assertEqual(self.files(), ["video/race_00007_post-2.mp4", "video/race_00007_post.mp4"])
+
+    def test_a_failed_write_releases_its_name(self):
+        naming = load("naming")
+        with self.assertRaises(RuntimeError):
+            with naming.reserved("video/fail", "", "mp4", 64, 64):
+                raise RuntimeError("encoder failed")
+        self.assertEqual(self.files(), [])
+
+
+class CleanInstallTests(unittest.TestCase):
+    def test_resize_only_validates_without_model_files(self):
+        with patch.object(load("models"), "upscale_models", return_value=[]), \
+                patch.object(load("models"), "rife_models", return_value=[]):
+            spec = N.VideoFinishPlan.INPUT_TYPES()["required"]
+        self.assertEqual(spec["upscale_model"][0], ["none"])
+        self.assertEqual(spec["rife_model"][0], ["none"])
+        plan = N.VideoFinishPlan().make(False, "none", "height", 720, "none", "none")[0]
+        self.assertEqual(plan["resize"], {"fit": "height", "size": 720})
+
+
 class SchemaTest(unittest.TestCase):
     """Released node IDs, inputs, defaults and outputs change only deliberately: update tests/schema.json."""
 

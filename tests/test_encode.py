@@ -208,6 +208,15 @@ class CopyTests(unittest.TestCase):
             self.assertEqual(json.loads(container.metadata["workflow"]), {"nodes": [1]})
             self.assertEqual(container.streams.video[0].codec_tag, "hvc1")
 
+    def test_remux_h264_matroska_keeps_every_frame(self):
+        path = os.path.join(self.tmp.name, "h264.mkv")
+        offset_file(path, 0, 0)
+        out = os.path.join(self.tmp.name, "copy.mkv")
+        ev.remux(path, out, "mkv")
+        self.assertEqual(self.packets(out, "video"), self.packets(path, "video"))
+        with av.open(out) as f:
+            self.assertEqual(sum(1 for _ in f.decode(video=0)), 24)
+
     def test_remux_refuses_another_container(self):
         with self.assertRaisesRegex(ValueError, "keeps the source's container"):
             ev.remux(self.source, os.path.join(self.tmp.name, "copy.mkv"), "mkv")
@@ -231,6 +240,70 @@ class CopyTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Opus audio only"):
             ev.Writer(os.path.join(self.tmp.name, "x.webm"), 96, 64, 24,
                       S(container="webm", video_codec="av1", audio_codec="copy"), audio_copy=aac)
+
+
+def offset_file(path, video_start, audio_start, frames=24, codec="libx264", container="matroska"):
+    """A file whose video and audio start at the given times (seconds), as some cameras and editors write."""
+    with av.open(path, "w", format=container) as out:
+        video = out.add_stream(codec, rate=24)
+        video.width, video.height, video.pix_fmt = 96, 64, "yuv420p"
+        audio = out.add_stream("aac", rate=48000, layout="stereo")
+        base = round(video_start * 24)
+        for n in range(frames):
+            frame = av.VideoFrame.from_ndarray(np.full((64, 96, 3), 8 * n, np.uint8), format="rgb24")
+            frame.pts, frame.time_base = base + n, Fraction(1, 24)
+            out.mux(video.encode(frame))
+        out.mux(video.encode(None))
+        start = round(audio_start * 48000)
+        for k in range(frames * 2000 // 1024):
+            chunk = av.AudioFrame.from_ndarray(np.full((2, 1024), 0.1, np.float32), format="fltp", layout="stereo")
+            chunk.sample_rate, chunk.pts, chunk.time_base = 48000, start + 1024 * k, Fraction(1, 48000)
+            out.mux(audio.encode(chunk))
+        out.mux(audio.encode(None))
+
+
+class TimelineTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+
+    def path(self, name):
+        return os.path.join(self.tmp.name, name)
+
+    def write(self, source, settings, out):
+        with ev.Writer(out, source.width, source.height, source.fps, settings,
+                       audio_copy=source.file if settings.audio_codec == "copy" else None,
+                       audio=None if settings.audio_codec == "copy" else source.load_audio(),
+                       audio_origin=source.origin) as writer:
+            for image in source.frames():
+                writer.write(image)
+
+    def first_audio(self, path):
+        with av.open(path) as f:
+            packets = [p for p in f.demux(f.streams.audio[0]) if p.size]
+            return len(packets), packets[0].pts * packets[0].time_base
+
+    def test_copied_audio_follows_a_late_video_start(self):
+        path = self.path("late.mkv")
+        offset_file(path, 5, 5)
+        source = src.FileSource(path)
+        self.assertEqual(source.origin, 5)
+        self.write(source, S(container="mkv", video_codec="h264", audio_codec="copy"), self.path("copy.mkv"))
+        count, start = self.first_audio(self.path("copy.mkv"))
+        self.assertGreater(count, 40)
+        self.assertLess(abs(start), Fraction(1, 100))
+
+    def test_delayed_audio_keeps_its_delay(self):
+        path = self.path("delay.mkv")
+        offset_file(path, 0, 0.5)
+        source = src.FileSource(path)
+        self.write(source, S(container="mkv", video_codec="h264", audio_codec="copy"), self.path("copy.mkv"))
+        _, start = self.first_audio(self.path("copy.mkv"))
+        self.assertAlmostEqual(float(start), 0.5, delta=0.03)
+        self.write(source, S(container="mkv", video_codec="h264", audio_codec="flac"), self.path("flac.mkv"))
+        samples = decoded_audio(self.path("flac.mkv"))
+        onset = int(np.argmax(np.abs(samples[0]) > 0.05))
+        self.assertAlmostEqual(onset / 48000, 0.5, delta=0.03)
 
 
 class SourceTests(unittest.TestCase):
@@ -278,6 +351,17 @@ class SourceTests(unittest.TestCase):
         loaded = src.FileSource(path).load_audio()
         self.assertEqual(loaded["sample_rate"], 44100)
         np.testing.assert_allclose(loaded["waveform"][0].numpy(), audio["waveform"][0, :, :44100].numpy(), atol=2 ** -22)
+
+    def test_file_alpha_is_refused(self):
+        path = os.path.join(self.tmp.name, "alpha.mkv")
+        with av.open(path, "w", format="matroska") as out:
+            stream = out.add_stream("ffv1", rate=24)
+            stream.width, stream.height, stream.pix_fmt = 64, 64, "bgra"
+            frame = av.VideoFrame.from_ndarray(np.zeros((64, 64, 4), np.uint8), format="bgra")
+            out.mux(stream.encode(frame))
+            out.mux(stream.encode(None))
+        with self.assertRaisesRegex(ValueError, "alpha"):
+            src.FileSource(path)
 
     def test_bytesio_source(self):
         path = os.path.join(self.tmp.name, "b.mp4")
