@@ -1,0 +1,16 @@
+[project]
+name = "comfyui-videofinish"
+description = "Video upscaling, resizing, interpolation, and configurable export: a Save Video with H.264/H.265/AV1 and FLAC/Opus/AAC choices, and post-processing (spandrel upscale models, Lanczos resize, RIFE 4.26) that streams one frame at a time and encodes once."
+version = "0.1.0"
+license = "MIT"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/bno84/ComfyUI-VideoFinish"
+
+[tool.comfy]
+PublisherId = "bno84"
+DisplayName = "Video Finish"
+Icon = "https://raw.githubusercontent.com/bno84/ComfyUI-VideoFinish/main/docs/icon.png"
+"requires-comfyui" = ">=0.38.0"  # Tested with 0.38.0.

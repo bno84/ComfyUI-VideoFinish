@@ -1,0 +1,332 @@
+{
+  "id": "5f0d6a2e-7f3e-4c1b-9b8e-3a2d1c0f9e11",
+  "revision": 0,
+  "last_node_id": 5,
+  "last_link_id": 4,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "LoadVideo",
+      "pos": [
+        60,
+        120
+      ],
+      "size": [
+        340,
+        420
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "file",
+          "type": "COMBO",
+          "widget": {
+            "name": "file"
+          },
+          "link": null
+        },
+        {
+          "name": "upload",
+          "type": "IMAGEUPLOAD",
+          "widget": {
+            "name": "upload"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "VIDEO",
+          "type": "VIDEO",
+          "links": [
+            1
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.38.0",
+        "Node name for S&R": "LoadVideo"
+      },
+      "widgets_values": [
+        "example.mp4",
+        "image"
+      ]
+    },
+    {
+      "id": 2,
+      "type": "VideoFinishSaveVideo",
+      "pos": [
+        440,
+        120
+      ],
+      "size": [
+        360,
+        420
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "video",
+          "type": "VIDEO",
+          "link": 1
+        },
+        {
+          "name": "title",
+          "shape": 7,
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "artist",
+          "shape": 7,
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "comment",
+          "shape": 7,
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "lyrics",
+          "shape": 7,
+          "type": "STRING",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "video",
+          "type": "VIDEO",
+          "links": [
+            2
+          ]
+        },
+        {
+          "name": "saved",
+          "type": "VIDEO",
+          "links": [
+            4
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui-videofinish",
+        "ver": "0.1.0",
+        "Node name for S&R": "VideoFinishSaveVideo"
+      },
+      "widgets_values": [
+        "video/VideoFinish",
+        "",
+        "mp4",
+        "h265",
+        18,
+        0,
+        "auto",
+        "medium",
+        "flac",
+        192
+      ]
+    },
+    {
+      "id": 3,
+      "type": "VideoFinishPlan",
+      "pos": [
+        440,
+        600
+      ],
+      "size": [
+        360,
+        230
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "plan",
+          "type": "VIDEOFINISH_PLAN",
+          "links": [
+            3
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui-videofinish",
+        "ver": "0.1.0",
+        "Node name for S&R": "VideoFinishPlan"
+      },
+      "widgets_values": [
+        true,
+        "up4x-latest-conservative.pth",
+        "height",
+        1080,
+        "2x",
+        "rife4.26.pkl"
+      ]
+    },
+    {
+      "id": 4,
+      "type": "VideoFinishProcess",
+      "pos": [
+        840,
+        120
+      ],
+      "size": [
+        380,
+        520
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "video",
+          "type": "VIDEO",
+          "link": 2
+        },
+        {
+          "name": "plan",
+          "type": "VIDEOFINISH_PLAN",
+          "link": 3
+        },
+        {
+          "name": "same_number_as",
+          "shape": 7,
+          "type": "VIDEO",
+          "link": 4
+        },
+        {
+          "name": "title",
+          "shape": 7,
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "artist",
+          "shape": 7,
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "comment",
+          "shape": 7,
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "lyrics",
+          "shape": 7,
+          "type": "STRING",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "saved",
+          "type": "VIDEO",
+          "links": null
+        },
+        {
+          "name": "report",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui-videofinish",
+        "ver": "0.1.0",
+        "Node name for S&R": "VideoFinishProcess"
+      },
+      "widgets_values": [
+        "video/VideoFinish",
+        "post",
+        "mp4",
+        "h265",
+        18,
+        0,
+        "auto",
+        "medium",
+        "opus",
+        128
+      ]
+    },
+    {
+      "id": 5,
+      "type": "MarkdownNote",
+      "pos": [
+        60,
+        600
+      ],
+      "size": [
+        340,
+        560
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "Read me",
+      "properties": {},
+      "widgets_values": [
+        "## Video Finish: save, then post-process\n\n1. **Load Video**: pick a video. With generated frames, use **Create Video** here instead.\n2. **Save Video (VideoFinish)** writes the working copy: H.265 CRF 18 and lossless FLAC by default.\n3. **Video Finish: process and save** upscales, resizes and interpolates, and encodes once. It writes `<prefix>_<number>_post.mp4` with the save's number.\n\n**Why the wiring matters**\n- *video → video*: the saver passes its input on unchanged and unencoded. Post-processing then runs after the save and starts from the same frames.\n- *saved → same_number_as*: gives the processed file the save's number.\n\nFrom a video file, post-processing starts from decoded (lossy) frames. When a saved file will be processed later, save it at a lower CRF or 10-bit.\n\n**Models** (not included; see the README for links and licences):\n- `models/upscale_models/`: e.g. Real-CUGAN `up4x-latest-conservative.pth` or `2xLiveActionV1_SPAN_490000.pth`.\n- `models/rife/`: RIFE 4.26 `flownet.pkl`, renamed e.g. `rife4.26.pkl`.\n\nWith *upscale* off, *resize* off and *interpolate* none, nothing is processed and nothing is written."
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    }
+  ],
+  "links": [
+    [
+      1,
+      1,
+      0,
+      2,
+      0,
+      "VIDEO"
+    ],
+    [
+      2,
+      2,
+      0,
+      4,
+      0,
+      "VIDEO"
+    ],
+    [
+      3,
+      3,
+      0,
+      4,
+      1,
+      "VIDEOFINISH_PLAN"
+    ],
+    [
+      4,
+      2,
+      1,
+      4,
+      2,
+      "VIDEO"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.9,
+      "offset": [
+        0,
+        0
+      ]
+    }
+  },
+  "version": 0.4
+}

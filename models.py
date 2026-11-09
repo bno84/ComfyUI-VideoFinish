@@ -26,6 +26,8 @@ def upscale_models():
 
 
 def rife_models():
+    if RIFE not in folder_paths.folder_names_and_paths:
+        register()
     return folder_paths.get_filename_list(RIFE)
 
 

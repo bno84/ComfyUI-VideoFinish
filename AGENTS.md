@@ -16,5 +16,12 @@ explain the change, then `### Why` and relevant `### Testing` notes.
 Append `Assisted-by: MODEL-ID` when creating or significantly changing commits.
 Do not add redundant Co-Authored-By lines for agents.
 
+Run the tests from `tests/` with ComfyUI on `PYTHONPATH`:
+`python -m unittest discover -s . -v`. Without a local ComfyUI, run them in a
+container image that has ComfyUI. The tests fail if anything starts
+a subprocess, or if a tensor VIDEO is encoded by `save_to` or
+`get_stream_source`. After a deliberate change to node inputs, regenerate
+`tests/schema.json` with `VIDEOFINISH_UPDATE_SCHEMA=1`.
+
 Publishing and remote pushes require user authorization. Local development
 does not require or access Registry tokens.

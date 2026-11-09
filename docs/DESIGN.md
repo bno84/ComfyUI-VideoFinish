@@ -2,7 +2,7 @@
 
 Subtitle: *Video upscaling, resizing, interpolation, and configurable export.*
 
-Status: agreed layout (2026-11-09, revised the same day), not yet implemented. This repo is local only: no remote, nothing pushed or
+Status: implemented as 0.1.0 (unreleased); §9 records decisions made during implementation. This repo is local only: no remote, nothing pushed or
 published. History: an earlier draft kept processed frames unencoded in memory. One review round (gpt-6.1-sol,
 medium) checked that draft; its findings that still apply are folded in below (marked *review*). That draft was
 replaced after measuring memory: about 52 GB of float32 frames for one 43 s H3 video at 1080p/48 fps.
@@ -43,11 +43,11 @@ Moved from FixedSoundtrack (`save_video.py` and its tests), and replaces `FixedS
 - `copy` remuxes a file-backed VIDEO without re-encoding (core `VideoFromFile.save_to` already reuses streams when
   container, codec, depth, CRF, color, trim and crop allow it; verified on the pinned ComfyUI) and errors clearly for a
   tensor VIDEO. For sources that are already final files.
-- Naming: `<prefix>_<number>_<suffix>.<ext>`, never overwrites (`-2`, `-3`), `save` toggle, as VideoPostSave.
+- Naming: `<prefix>_<number>_<suffix>.<ext>`, never overwrites (`-2`, `-3`), as VideoPostSave.
   Optional player tags (title, artist, comment, lyrics) as in AudioVisualizer.
 - Outputs: `video`, the input unchanged (for ordering and lossless frames downstream), and `saved`,
-  `VideoFromFile(saved path)`, for chaining file-based nodes and for `same_number_as`. With `save` off, `saved`
-  still reserves and carries the number, without writing a file.
+  `VideoFromFile(saved path)`, for chaining file-based nodes and for `same_number_as`. No `save` toggle: bypass
+  the node instead (both outputs then carry the input, and the process node counts normally).
 - Node defaults suit working copies: H.265 CRF 18, preset medium, bit depth auto, FLAC. Templates set their own
   values per use case, e.g. Opus 128 for distributable copies (FixedSoundtrack template).
 
@@ -76,8 +76,8 @@ One node replaces the upscale/resize/RIFE stage nodes. Options only, no video in
     memory upstream (at H3's 486×270, 43 s ≈ 1.6 GB float32), fed one at a time.
   - File-backed VIDEO without trim/crop: decoded incrementally by PyAV from `get_stream_source()`.
   - Trimmed/cropped file VIDEO: `get_components()` (materializes the source; documented).
-- Audio: a tensor VIDEO's waveform is encoded with the chosen audio codec (FLAC by default). A file source can
-  also use `copy`, which adds no audio generation.
+- Audio: a tensor VIDEO's waveform is encoded with the chosen audio codec (FLAC by default, since `copy` cannot
+  apply to a waveform). A file source can also use `copy`, which adds no audio generation.
 - Nothing enabled in the plan: writes nothing and blocks its VIDEO output (`ExecutionBlocker`), with a report.
 - Outputs: `saved`, `VideoFromFile(saved path)`, and a report (steps, sizes, FPS, frames, time, frame source).
 - RIFE: last frame held (duration unchanged), cuts interpolated (documented). Progress per output frame,
@@ -181,3 +181,22 @@ Not done without separate authorization: GitHub repo creation, pushes, tags, Reg
 4. FixedSoundtrack removal + template switch.
 5. sd-cpp integration and workflow rebuilds.
 6. GPU validation; fill measured numbers into the README.
+
+## 9. Decisions made during implementation
+
+- The encoder converts each frame to 8- or 16-bit RGB on the calling thread, then encodes on a background thread
+  with a queue of 4 frames, so GPU work and encoding overlap.
+- PyAV 19's bundled libx265 corrupts memory (glibc "corrupted size vs. prev_size") on some tiny frames, e.g. 48x32
+  and 48x48, when encoding off the main thread. It happens with plain PyAV too, not only our writer. ComfyUI runs
+  nodes off the main thread, so H.265 below 64x64 is refused. All sizes from 40x32 to 1944x1080 that were tried
+  apart from width 48 worked.
+- Opus gets 3.0 and quad layouts for 3 and 4 channels (it cannot map FFmpeg's 2.1 and 4.0); audio is fed as packed
+  float because PyAV cannot build planar frames with 8 channels.
+- `naming.numbered()` and `source.file_path()` only look at `VideoFromFile`: the base `get_stream_source()`
+  encodes a tensor VIDEO to a BytesIO, which would bring the hidden encode back.
+- Upscale models load as core Load Upscale Model does (`load_torch_file(safe_load=True)`), RIFE with
+  `torch.load(weights_only=True)`.
+- GPU validation (2026-11-09, RX 9070 XT, the image pinned to ComfyUI 0.38.0): see the README's measurements.
+  The vendored IFNet matches Fannovel16's 4.26 implementation to 1e-5 and loads the published checkpoint strictly.
+- Not verified: Python 3.10 (the image has 3.12; CI covers 3.10), rotation metadata (implemented as core does,
+  no rotated test file), trimmed/cropped file inputs on GPU (CPU path uses core `get_components()`).

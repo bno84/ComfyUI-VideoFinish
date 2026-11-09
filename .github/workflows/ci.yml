@@ -1,0 +1,106 @@
+name: CI and release
+
+# Every push and pull request runs the checks. A pushed v* tag also publishes
+# to the Comfy Registry after the checks pass.
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  COMFY_CLI_VERSION: "1.23.0"
+  RUFF_VERSION: "0.17.2"
+  # Oldest ComfyUI this pack declares in requires-comfyui.
+  COMFYUI_REF: v0.38.0
+
+jobs:
+  checks:
+    timeout-minutes: 5
+    name: Metadata, lint and security scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Tag matches pyproject version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match pyproject version $version"
+            exit 1
+          fi
+      - name: Registry metadata (comfy node validate)
+        run: |
+          pip install "comfy-cli==$COMFY_CLI_VERSION" "ruff==$RUFF_VERSION"
+          comfy --skip-prompt --no-enable-telemetry env
+          comfy node validate
+      - name: Security scan as errors
+        # comfy-cli only warns about exec, eval and one-line multi-statements
+        # for now and says these will become errors; fail on them already.
+        run: ruff check . --select S102,S307,E702
+      - name: Lint
+        run: ruff check . --select E9,F
+
+  comfyui:
+    timeout-minutes: 15
+    name: ComfyUI ${{ matrix.python }} (CPU) · tests and example load
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: pack
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install ComfyUI with CPU PyTorch, without other node packs or model folders
+        run: |
+          git clone --depth 1 --branch "$COMFYUI_REF" https://github.com/Comfy-Org/ComfyUI.git comfyui
+          pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+          pip install -r comfyui/requirements.txt
+          cp -r pack comfyui/custom_nodes/ComfyUI-VideoFinish
+      - name: Unit and integration tests
+        working-directory: comfyui/custom_nodes/ComfyUI-VideoFinish/tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}/comfyui
+        run: python -m unittest discover -s . -v
+      - name: Start ComfyUI and check the pack and example
+        run: >
+          python pack/.github/scripts/comfyui_smoke.py comfyui
+          --pack ComfyUI-VideoFinish --cnr-id comfyui-videofinish
+          --node VideoFinishSaveVideo --node VideoFinishPlan --node VideoFinishProcess
+          --workflow "pack/example_workflows/Video Finish - save and post-process.json"
+
+  publish:
+    timeout-minutes: 5
+    name: Publish to the Comfy Registry
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [checks, comfyui]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Changelog from the tag message
+        run: |
+          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          git for-each-ref "refs/tags/$GITHUB_REF_NAME" --format='%(contents:subject)%0a%0a%(contents:body)' > changelog.md
+          cat changelog.md
+      - name: Publish
+        env:
+          REGISTRY_ACCESS_TOKEN: ${{ secrets.REGISTRY_ACCESS_TOKEN }}
+        run: |
+          pip install "comfy-cli==$COMFY_CLI_VERSION"
+          comfy --skip-prompt --no-enable-telemetry env
+          comfy node publish --token "$REGISTRY_ACCESS_TOKEN" --changelog-file changelog.md
