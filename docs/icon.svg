@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400" role="img" aria-labelledby="title desc">
+  <title id="title">Video Finish</title>
+  <desc id="desc">A muted amber video frame holds a stepped-to-smooth image and ends in a small save arrow on a charcoal tile.</desc>
+  <rect width="400" height="400" rx="64" fill="#242424"/>
+  <rect x="16" y="16" width="368" height="368" rx="50" fill="none" stroke="#383838" stroke-width="2"/>
+  <!-- A short offset edge suggests the adjacent frame. -->
+  <path d="M58 236V92Q58 80 70 80H292" fill="none" stroke="#C9AD78" stroke-width="12" stroke-linecap="round"/>
+  <rect x="82" y="106" width="252" height="176" rx="16" fill="#242424" stroke="#C9AD78" stroke-width="14"/>
+  <!-- The same rising image resolves from coarse steps into a clean slope. -->
+  <path d="M112 250V220H140V194H168V168H196L230 138L304 218V250Z" fill="#E5E0D6"/>
+  <!-- A small save cue overlaps the finished frame's lower edge. -->
+  <rect x="240" y="244" width="108" height="92" rx="16" fill="#242424"/>
+  <g fill="none" stroke="#C9AD78" stroke-width="14" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M294 258V300M276 283L294 301L312 283"/>
+    <path d="M260 310V326H328V310"/>
+  </g>
+</svg>
