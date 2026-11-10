@@ -129,14 +129,14 @@ Weights are not included or downloaded. Tested with:
 
 | File | Folder | Source | Licence |
 | --- | --- | --- | --- |
-| `up4x-latest-conservative.pth` (Real-CUGAN 4×) | `models/upscale_models/` | `updated_weights.zip` of the [Real-CUGAN release](https://github.com/bilibili/ailab/releases/tag/Real-CUGAN) | MIT (bilibili) |
+| `RealCUGAN-4x-conservative.pth` (Real-CUGAN 4×) | `models/upscale_models/` | `updated_weights.zip` of the [Real-CUGAN release](https://github.com/bilibili/ailab/releases/tag/Real-CUGAN), `up4x-latest-conservative.pth` renamed | MIT (bilibili) |
 | `2xLiveActionV1_SPAN_490000.pth` (SPAN 2×) | `models/upscale_models/` | [OpenModelDB](https://openmodeldb.info/models/2x-LiveActionV1-SPAN), jcj83429 | CC-BY-NC-SA-4.0: non-commercial |
 | `rife4.26.pkl` (RIFE 4.26) | `models/rife/` | [Practical-RIFE](https://github.com/hzwer/Practical-RIFE) v4.26 download, `train_log/flownet.pkl` renamed | MIT (hzwer) |
 
 SHA-256 of the tested files:
 
 ```
-a8c8185def699b0883662a02df0ef2e6db3b0275170b6cc0d28089b64b273427  up4x-latest-conservative.pth
+a8c8185def699b0883662a02df0ef2e6db3b0275170b6cc0d28089b64b273427  RealCUGAN-4x-conservative.pth
 8b166c75831ea7f694d9058ee9c8df8148af8cc1d2b57e69e6581b15cab572f7  2xLiveActionV1_SPAN_490000.pth
 45c7f74156704769dc9f85cfcaf8552e1e926f9399dcfa3a553dee88fac6f53f  rife4.26.pkl
 ```
