@@ -26,7 +26,7 @@ COPY = "copy"
 # WebM only stores these; MP4 and MKV store every codec offered here.
 WEBM_CODECS = {"video": {"av1", "vp9", "vp8"}, "audio": {"opus", "vorbis"}}
 # -1 picks these: core Save Video's H.264 and AV1 defaults; 28 is x265's equivalent of x264's 23.
-DEFAULT_CRF = {"h264": 23, "h265": 28, "av1": 30, "vp9": 32}
+DEFAULT_CRF = {"h264": 23, "h265": 28, "av1": 30, "vp9": 20}
 MAX_CRF = {"h264": 51, "h265": 51, "av1": 63, "vp9": 63}
 PRESETS = ("fast", "medium", "slow", "slower")
 SVT_PRESETS = {"fast": 10, "medium": 8, "slow": 6, "slower": 4}  # SVT-AV1 numbers presets 0 (slowest) to 13

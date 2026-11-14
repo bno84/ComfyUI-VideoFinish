@@ -60,7 +60,7 @@ Create Video / Load Video ─► Save Video (VideoFinish) ── working copy (e
 
 - Quality by `crf` (default 18; -1 picks the codec's default) or
   `video_bitrate_kbps`. `preset` trades speed for size. VP9 uses libvpx-vp9
-  (default CRF 32; presets map to cpu-used 4/2/1/0). For browser delivery,
+  (default CRF 20; presets map to cpu-used 4/2/1/0). For browser delivery,
   choose WebM + VP9 + Opus. VP9 10-bit needs a high-bit-depth libvpx build;
   if unavailable, choose bit depth 8 or another codec. WebM writes its seek index at the front; MP4 uses FastStart.
 - `bit_depth` `auto` keeps the source's depth (10-bit for 10-bit or HDR
