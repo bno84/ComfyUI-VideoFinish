@@ -55,11 +55,14 @@ Create Video / Load Video ─► Save Video (VideoFinish) ── working copy (e
 
 | Container | Video | Audio |
 | --- | --- | --- |
-| `mp4`, `mkv` | `h264`, `h265`, `av1`, `copy` | `flac`, `opus`, `aac`, `copy` |
-| `webm` | `av1`, `copy` | `opus`, `copy` |
+| `mp4`, `mkv` | `h264`, `h265`, `av1`, `vp9`, `copy` | `flac`, `opus`, `aac`, `copy` |
+| `webm` | `av1`, `vp9`, `copy` | `opus`, `copy` |
 
 - Quality by `crf` (default 18; -1 picks the codec's default) or
-  `video_bitrate_kbps`. `preset` trades speed for size.
+  `video_bitrate_kbps`. `preset` trades speed for size. VP9 uses libvpx-vp9
+  (default CRF 32; presets map to cpu-used 4/2/1/0). For browser delivery,
+  choose WebM + VP9 + Opus. VP9 10-bit needs a high-bit-depth libvpx build;
+  if unavailable, choose bit depth 8 or another codec. WebM writes its seek index at the front; MP4 uses FastStart.
 - `bit_depth` `auto` keeps the source's depth (10-bit for 10-bit or HDR
   sources); `10` keeps more of the frames' float precision.
 - `flac` is lossless 24-bit audio; Opus is resampled to 48 kHz. 1 to 8 audio

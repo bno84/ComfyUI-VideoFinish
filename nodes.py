@@ -22,14 +22,14 @@ def encode_inputs(copy):
     """The encode controls shared by both saving nodes. copy: offer stream copy of the video."""
     return {
         "container": (list(E.CONTAINERS), {"default": "mp4",
-                      "tooltip": "MP4 and MKV store every codec here; WebM stores AV1 with Opus only."}),
+                      "tooltip": "MP4 and MKV store every codec here; WebM stores AV1 or VP9 with Opus only."}),
         "video_codec": (VIDEO_CODECS + (["copy"] if copy else []), {"default": "h265",
-                        "tooltip": "CPU encoders: libx264, libx265 (tagged hvc1) and SVT-AV1."
+                        "tooltip": "CPU encoders: libx264, libx265 (tagged hvc1) SVT-AV1 and libvpx-vp9."
                                    + (" copy: keep a video file's streams as they are (same container; "
                                       "audio is copied too)." if copy else "")}),
         "crf": ("INT", {"default": 18, "min": -1, "max": 63,
-                        "tooltip": "Lower means higher quality and larger files. -1: h264 23, h265 28, av1 30. "
-                                   "AV1 0 is lossless. Ignored when video_bitrate_kbps is set."}),
+                        "tooltip": "Lower means higher quality and larger files. -1: h264 23, h265 28, av1 30, vp9 32. "
+                                   "AV1 / VP9 0 is lossless. Ignored when video_bitrate_kbps is set."}),
         "video_bitrate_kbps": ("INT", {"default": 0, "min": 0, "max": 500000, "step": 100,
                                        "tooltip": "0 uses CRF. Otherwise an average bitrate in kbit/s, instead of CRF."}),
         "bit_depth": (["auto", "8", "10"], {"default": "auto",

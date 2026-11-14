@@ -37,7 +37,7 @@ tensor VIDEO on, and VideoPost's ffmpeg pipeline needed a file, so it encoded a 
 ### Save Video (VideoFinish)
 
 Moved from FixedSoundtrack (`save_video.py` and its tests), and replaces `FixedSoundtrackSaveVideo`.
-- Containers mp4/mkv/webm; video h264/h265/av1/**copy**; audio flac/opus/aac/**copy**; CRF or bitrate;
+- Containers mp4/mkv/webm; video h264/h265/av1/vp9/**copy**; audio flac/opus/aac/**copy**; CRF or bitrate;
   bit depth auto/8/10; preset; HDR tags from the source VIDEO. In-process PyAV, no executable or subprocess;
   atomic hidden partial file then rename; progress and cancellation; workflow metadata.
 - `copy` remuxes a file-backed VIDEO without re-encoding (core `VideoFromFile.save_to` already reuses streams when

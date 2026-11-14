@@ -20,16 +20,17 @@ import torch
 from av.video.reformatter import ColorPrimaries, ColorRange, ColorTrc
 
 CONTAINERS = {"mp4": "mp4", "mkv": "matroska", "webm": "webm"}
-VIDEO_ENCODERS = {"h264": "libx264", "h265": "libx265", "av1": "libsvtav1"}
+VIDEO_ENCODERS = {"h264": "libx264", "h265": "libx265", "av1": "libsvtav1", "vp9": "libvpx-vp9"}
 AUDIO_ENCODERS = {"flac": "flac", "opus": "libopus", "aac": "aac"}
 COPY = "copy"
 # WebM only stores these; MP4 and MKV store every codec offered here.
 WEBM_CODECS = {"video": {"av1", "vp9", "vp8"}, "audio": {"opus", "vorbis"}}
 # -1 picks these: core Save Video's H.264 and AV1 defaults; 28 is x265's equivalent of x264's 23.
-DEFAULT_CRF = {"h264": 23, "h265": 28, "av1": 30}
-MAX_CRF = {"h264": 51, "h265": 51, "av1": 63}
+DEFAULT_CRF = {"h264": 23, "h265": 28, "av1": 30, "vp9": 32}
+MAX_CRF = {"h264": 51, "h265": 51, "av1": 63, "vp9": 63}
 PRESETS = ("fast", "medium", "slow", "slower")
 SVT_PRESETS = {"fast": 10, "medium": 8, "slow": 6, "slower": 4}  # SVT-AV1 numbers presets 0 (slowest) to 13
+VP9_SPEEDS = {"fast": 4, "medium": 2, "slow": 1, "slower": 0}
 MAX_CHANNELS = 8
 COLOR_TRANSFERS = {"sRGB": ColorTrc.IEC61966_2_1, "HDR": ColorTrc.ARIB_STD_B67, "HDR PQ": ColorTrc.SMPTE2084}
 BT709_NCL, BT2020_NCL = 1, 9
@@ -65,7 +66,7 @@ def layout(channels, audio_codec=None):
     return av.AudioLayout(f"{channels}c").name
 
 
-def check_encoders(video_codec, audio_codec=None):
+def check_encoders(video_codec, audio_codec=None, bit_depth=8):
     """Check the libraries PyAV actually uses, not an unrelated ffmpeg executable."""
     missing = []
     for name in (VIDEO_ENCODERS.get(video_codec), AUDIO_ENCODERS.get(audio_codec)):
@@ -75,6 +76,11 @@ def check_encoders(video_codec, audio_codec=None):
             av.Codec(name, "w")
         except (ValueError, av.error.FFmpegError):
             missing.append(name)
+    if not missing and video_codec == "vp9" and bit_depth == 10:
+        formats = av.Codec(VIDEO_ENCODERS[video_codec], "w").video_formats
+        if formats is not None and "yuv420p10le" not in {f.name for f in formats}:
+            raise RuntimeError("This PyAV build's VP9 encoder lacks 10-bit output; choose bit_depth 8, "
+                               "another video codec, or a PyAV build with high-bit-depth libvpx support.")
     if missing:
         raise RuntimeError(f"This PyAV build lacks the {', '.join(missing)} encoder. Choose another codec, "
                            "or install a PyAV build that has it; an ffmpeg executable does not change PyAV's libraries.")
@@ -87,6 +93,14 @@ def color_properties(color_space):
             "color_trc": COLOR_TRANSFERS[color_space],
             "colorspace": BT2020_NCL if hdr else BT709_NCL,
             "color_range": ColorRange.MPEG}
+
+
+def mux_options(container):
+    if container == "mp4":
+        return {"movflags": "use_metadata_tags+faststart"}
+    if container == "webm":
+        return {"cues_to_front": "1"}
+    return {}
 
 
 def tag_values(metadata):
@@ -104,7 +118,7 @@ def validate(settings, width, height, audio_codec_in=None):
     if s.audio_codec not in (*AUDIO_ENCODERS, COPY):
         raise ValueError(f"Unknown audio codec {s.audio_codec!r}; choose {', '.join(AUDIO_ENCODERS)} or copy")
     if s.container == "webm" and s.video_codec not in WEBM_CODECS["video"]:
-        raise ValueError("WebM stores AV1 video only here; choose av1, or the mp4 or mkv container")
+        raise ValueError("WebM stores AV1 or VP9 video here; choose av1 or vp9, or the mp4 or mkv container")
     if s.container == "webm" and audio_codec_in is not None and audio_codec_in not in WEBM_CODECS["audio"]:
         raise ValueError(f"WebM stores Opus audio only here, not {audio_codec_in}; choose opus, "
                          "or the mp4 or mkv container")
@@ -152,7 +166,13 @@ def _video_stream(output, width, height, rate, s):
             options["svtav1-params"] = "lossless=1"  # As core: SVT-AV1 has no CRF 0.
         else:
             options["crf"] = str(crf)
-    if s.video_codec == "av1":
+    if s.video_codec == "vp9":
+        options.update({"deadline": "good", "cpu-used": str(VP9_SPEEDS[s.preset])})
+        if not s.video_bitrate:
+            stream.bit_rate = 0  # libvpx constant quality, without its default bitrate target.
+            if crf == 0:
+                options["lossless"] = "1"
+    elif s.video_codec == "av1":
         options["preset"] = str(SVT_PRESETS[s.preset])
     else:
         options["preset"] = s.preset
@@ -270,7 +290,7 @@ class Writer:
         try:
             validate(settings, width, height, self._copy.codec if self._copy else
                      settings.audio_codec if self._audio else None)
-            check_encoders(settings.video_codec, settings.audio_codec if self._audio else None)
+            check_encoders(settings.video_codec, settings.audio_codec if self._audio else None, settings.bit_depth)
         except BaseException:
             self._close_copy()
             raise
@@ -283,7 +303,7 @@ class Writer:
         os.close(os.open(self._temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666))
         try:
             s = self.settings
-            options = {"movflags": "use_metadata_tags+faststart"} if s.container == "mp4" else {}
+            options = mux_options(s.container)
             self._output = av.open(self._temporary, "w", format=CONTAINERS[s.container], options=options)
             self._output.metadata.update(tag_values(self.metadata))
             self._video = _video_stream(self._output, self.width, self.height, self.rate, s)
@@ -477,7 +497,7 @@ def remux(source, path, container, metadata=None):
                     raise ValueError(f"WebM cannot store {s.codec_context.codec.canonical_name}")
         os.close(os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666))
         try:
-            options = {"movflags": "use_metadata_tags+faststart"} if container == "mp4" else {}
+            options = mux_options(container)
             with av.open(temporary, "w", format=CONTAINERS[container], options=options) as output:
                 output.metadata.update(tag_values(metadata))
                 mapping = {}

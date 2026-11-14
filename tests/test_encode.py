@@ -6,6 +6,7 @@ import itertools
 import json
 import math
 import os
+from pathlib import Path
 import stat
 import tempfile
 import unittest
@@ -34,7 +35,7 @@ class EncodeTests(unittest.TestCase):
     def test_every_supported_combination_round_trips(self):
         metadata = {"prompt": {"1": {"class_type": "X"}}, "workflow": {"nodes": []}, "title": "Plain title"}
         for container, video_codec, audio_codec in itertools.product(ev.CONTAINERS, ev.VIDEO_ENCODERS, ev.AUDIO_ENCODERS):
-            if container == "webm" and (video_codec, audio_codec) != ("av1", "opus"):
+            if container == "webm" and (video_codec not in ("av1", "vp9") or audio_codec != "opus"):
                 continue
             with self.subTest(container=container, video=video_codec, audio=audio_codec):
                 path = self.path(f"{video_codec}-{audio_codec}.{container}")
@@ -43,7 +44,7 @@ class EncodeTests(unittest.TestCase):
                 with av.open(path) as source:
                     video, audio = source.streams.video[0], source.streams.audio[0]
                     self.assertEqual(video.codec_context.codec.canonical_name,
-                                     {"h264": "h264", "h265": "hevc", "av1": "av1"}[video_codec])
+                                     {"h264": "h264", "h265": "hevc", "av1": "av1", "vp9": "vp9"}[video_codec])
                     self.assertEqual(audio.codec_context.codec.canonical_name, audio_codec)
                     self.assertEqual(audio.sample_rate, 48000 if audio_codec == "opus" else 44100)
                     self.assertEqual(len(audio.layout.channels), 2)
@@ -56,6 +57,33 @@ class EncodeTests(unittest.TestCase):
                     self.assertEqual(tags["title"], "Plain title")
                     self.assertEqual(sum(1 for _ in source.decode(video=0)), 24)
         self.assertFalse([name for name in os.listdir(self.tmp.name) if name.startswith(".")])
+
+    def test_vp9_webm_depth_quality_bitrate_and_seeking(self):
+        for depth, crf, bitrate in ((8, 0, 0), (10, 32, 0), (8, 63, 0), (8, 18, 200)):
+            with self.subTest(depth=depth, crf=crf, bitrate=bitrate):
+                path = self.path(f"vp9-{depth}-{crf}-{bitrate}.webm")
+                formats = av.Codec("libvpx-vp9", "w").video_formats
+                if depth == 10 and "yuv420p10le" not in {f.name for f in formats}:
+                    with self.assertRaisesRegex(RuntimeError, "VP9 encoder lacks 10-bit"):
+                        ev.encode(path, gradient(frames=48), 24,
+                                  S(container="webm", video_codec="vp9", bit_depth=depth))
+                    self.assertFalse(os.path.exists(path))
+                    continue
+                ev.encode(path, gradient(frames=48), 24,
+                          S(container="webm", video_codec="vp9", audio_codec="opus",
+                            bit_depth=depth, crf=crf, video_bitrate=bitrate), audio=tone(seconds=2))
+                with av.open(path) as source:
+                    video = source.streams.video[0]
+                    self.assertEqual(video.codec_context.format.name, "yuv420p10le" if depth == 10 else "yuv420p")
+                    self.assertEqual(sum(1 for _ in source.decode(video=0)), 48)
+                self.assertGreater(decoded_audio(path).shape[1], 90000)
+                with av.open(path) as source:
+                    self.assertAlmostEqual(source.duration / av.time_base, 2, delta=.05)
+                    source.seek(av.time_base)
+                    self.assertTrue(list(source.decode(video=0)))
+                data = Path(path).read_bytes()
+                # Top-level Cues (not the SeekHead's ID reference) precede the first Cluster.
+                self.assertLess(data.rindex(bytes.fromhex("1c53bb6b")), data.index(bytes.fromhex("1f43b675")))
 
     def test_flac_is_lossless_and_trimmed_to_the_video(self):
         audio = tone(seconds=2.0, channels=1)
@@ -130,7 +158,7 @@ class EncodeTests(unittest.TestCase):
 
     def test_presets_reach_the_encoder(self):
         sizes = {}
-        for codec in ("h264", "h265", "av1"):
+        for codec in ("h264", "h265", "av1", "vp9"):
             for preset in ("fast", "slower"):
                 path = self.path(f"{codec}-{preset}.mkv")
                 ev.encode(path, gradient(frames=4), 24, S(container="mkv", video_codec=codec, preset=preset))
@@ -139,7 +167,7 @@ class EncodeTests(unittest.TestCase):
 
     def test_invalid_choices_fail_before_writing(self):
         cases = [
-            (S(container="webm", video_codec="h265", audio_codec="opus"), "AV1 video only"),
+            (S(container="webm", video_codec="h265", audio_codec="opus"), "AV1 or VP9 video"),
             (S(container="webm", video_codec="av1", audio_codec="flac"), "Opus audio only"),
             (S(video_codec="h264", crf=52), "between 0 and 51"),
             (S(bit_depth=12), "8 or 10"),
