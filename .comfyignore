@@ -1,0 +1,5 @@
+# Not part of the published node pack.
+.github/
+tests/
+RELEASING.md
+AGENTS.md
